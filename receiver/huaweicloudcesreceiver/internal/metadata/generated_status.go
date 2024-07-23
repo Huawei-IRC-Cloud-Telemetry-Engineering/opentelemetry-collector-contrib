@@ -6,9 +6,10 @@ import (
 	"go.opentelemetry.io/collector/component"
 )
 
-var Type = component.MustNewType("huaweicloudcesreceiver")
+var (
+	Type = component.MustNewType("huaweicloudcesreceiver")
+)
 
 const (
 	MetricsStability = component.StabilityLevelDevelopment
 )
-

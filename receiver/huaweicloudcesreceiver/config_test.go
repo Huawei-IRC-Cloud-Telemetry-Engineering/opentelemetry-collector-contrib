@@ -5,8 +5,10 @@ package huaweicloudcesreceiver
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/collector/receiver/scraperhelper"
 )
 
 func TestConfig_Validate(t *testing.T) {
@@ -18,28 +20,70 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "Valid config",
 			config: Config{
+				ControllerConfig: scraperhelper.ControllerConfig{
+					CollectionInterval: time.Hour,
+				},
 				HuaweiSessionConfig: HuaweiSessionConfig{
 					RegionName: "cn-north-1",
 				},
 				ProjectId: "my_project",
+				Period:    300,
+				Filter:    "min",
 			},
 			expectedError: "",
 		},
 		{
-			name: "Missing region name",
+			name: "Invalid Period",
 			config: Config{
+				ControllerConfig: scraperhelper.ControllerConfig{
+					CollectionInterval: time.Hour,
+				},
+				HuaweiSessionConfig: HuaweiSessionConfig{
+					RegionName: "cn-north-1",
+				},
 				ProjectId: "my_project",
+				Period:    100,
+				Filter:    "min",
 			},
-			expectedError: "region_name must be specified",
+			expectedError: "invalid period",
 		},
 		{
-			name: "Missing project id",
+			name: "Invalid Filter",
 			config: Config{
 				HuaweiSessionConfig: HuaweiSessionConfig{
 					RegionName: "cn-north-1",
 				},
+				ProjectId: "my_project",
+				Period:    300,
+				Filter:    "invalid",
 			},
-			expectedError: "project_id must be specified",
+			expectedError: "invalid filter",
+		},
+		{
+			name: "Missing region name",
+			config: Config{
+				ControllerConfig: scraperhelper.ControllerConfig{
+					CollectionInterval: time.Hour,
+				},
+				ProjectId: "my_project",
+				Period:    300,
+				Filter:    "min",
+			},
+			expectedError: errMissingRegionName.Error(),
+		},
+		{
+			name: "Missing project id",
+			config: Config{
+				ControllerConfig: scraperhelper.ControllerConfig{
+					CollectionInterval: time.Hour,
+				},
+				HuaweiSessionConfig: HuaweiSessionConfig{
+					RegionName: "cn-north-1",
+				},
+				Period: 300,
+				Filter: "min",
+			},
+			expectedError: errMissingProjectID.Error(),
 		},
 		{
 			name: "Proxy user without proxy address",
@@ -48,9 +92,14 @@ func TestConfig_Validate(t *testing.T) {
 					RegionName: "cn-north-1",
 					ProxyUser:  "user",
 				},
+				ControllerConfig: scraperhelper.ControllerConfig{
+					CollectionInterval: time.Hour,
+				},
 				ProjectId: "my_project",
+				Period:    300,
+				Filter:    "min",
 			},
-			expectedError: "proxy_address must be specified if proxy_user or proxy_password is set",
+			expectedError: errInvalidProxy.Error(),
 		},
 		{
 			name: "Proxy password without proxy address",
@@ -59,9 +108,14 @@ func TestConfig_Validate(t *testing.T) {
 					RegionName:    "cn-north-1",
 					ProxyPassword: "password",
 				},
+				ControllerConfig: scraperhelper.ControllerConfig{
+					CollectionInterval: time.Hour,
+				},
 				ProjectId: "my_project",
+				Period:    300,
+				Filter:    "min",
 			},
-			expectedError: "proxy_address must be specified if proxy_user or proxy_password is set",
+			expectedError: errInvalidProxy.Error(),
 		},
 		{
 			name: "Proxy address with proxy user and password",
@@ -72,7 +126,12 @@ func TestConfig_Validate(t *testing.T) {
 					ProxyUser:     "user",
 					ProxyPassword: "password",
 				},
+				ControllerConfig: scraperhelper.ControllerConfig{
+					CollectionInterval: time.Hour,
+				},
 				ProjectId: "my_project",
+				Period:    300,
+				Filter:    "min",
 			},
 			expectedError: "",
 		},
@@ -84,7 +143,7 @@ func TestConfig_Validate(t *testing.T) {
 			if tt.expectedError == "" {
 				assert.NoError(t, err)
 			} else {
-				assert.EqualError(t, err, tt.expectedError)
+				assert.ErrorContains(t, err, tt.expectedError)
 			}
 		})
 	}

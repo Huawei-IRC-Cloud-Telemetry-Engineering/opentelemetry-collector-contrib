@@ -6,4 +6,4 @@ status:
     development: [metrics]
   distributions: []
   codeowners:
-    active: [heitorganzeli]
+    active: [heitorganzeli, narcis96]

@@ -2,7 +2,7 @@ package huaweicloudcesreceiver
 
 import (
 	"context"
-	"math/rand"
+	"errors"
 	"net/url"
 	"os"
 	"strconv"
@@ -15,10 +15,10 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ces/v1/region"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/pdata/pcommon"
-	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
+
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver/internal"
 )
 
 type cesReceiver struct {
@@ -26,10 +26,10 @@ type cesReceiver struct {
 	client *ces.CesClient
 	cancel context.CancelFunc
 
-	host         component.Host
-	nextConsumer consumer.Metrics
-
-	config *Config
+	host             component.Host
+	nextConsumer     consumer.Metrics
+	lastUsedFinishTs time.Time
+	config           *Config
 }
 
 func newHuaweiCloudCesReceiver(settings receiver.CreateSettings, cfg *Config, next consumer.Metrics) *cesReceiver {
@@ -46,20 +46,50 @@ func (rcvr *cesReceiver) Start(ctx context.Context, host component.Host) (err er
 	ctx, rcvr.cancel = context.WithCancel(ctx)
 
 	if rcvr.client == nil {
-		// rcvr.client, err = rcvr.createClient()
-		// if err != nil {
-		// 	return
-		// }
+		rcvr.client, err = rcvr.createClient()
+		if err != nil {
+			rcvr.logger.Error(err.Error())
+			return
+		}
 	}
 
-	go rcvr.startPollingMetrics(ctx)
+	go func() {
+		if rcvr.config.InitialDelay > 0 {
+			<-time.After(rcvr.config.InitialDelay)
+		}
+		if err := rcvr.pollMetricsAndConsume(ctx); err != nil {
+			rcvr.logger.Error(err.Error())
+		}
+		ticker := time.NewTicker(rcvr.config.CollectionInterval)
 
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				//  TODO: Improve error handling for client-server interactions
+				//  The current implementation lacks robust error handling, especially for
+				//  scenarios such as service unavailability, timeouts, and request errors.
+				//  - Investigate how to handle service unavailability or timeouts gracefully.
+				//  - Implement appropriate actions or retries for different types of request errors.
+				//  - Refer to the Huawei SDK documentation to identify
+				//    all possible client/request errors and determine how to manage them.
+				//  - Consider implementing custom error messages or fallback mechanisms for critical failures.
+
+				if err := rcvr.pollMetricsAndConsume(ctx); err != nil {
+					rcvr.logger.Error(err.Error())
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 	return nil
 }
 
 func (rcvr *cesReceiver) createClient() (*ces.CesClient, error) {
 	auth, err := basic.NewCredentialsBuilder().
-		// Authentication can be configured through environment variables and other methods. Please refer to Chapter 2.4 Authentication Management
+		// Authentication can be configured through environment variables and other methods.
+		// Please refer to Chapter 2.4 Authentication Management
 		WithAk(os.Getenv("HUAWEICLOUD_SDK_AK")).
 		WithSk(os.Getenv("HUAWEICLOUD_SDK_SK")).
 		WithProjectId(rcvr.config.ProjectId).
@@ -100,103 +130,78 @@ func (rcvr *cesReceiver) createClient() (*ces.CesClient, error) {
 	return client, nil
 }
 
-func (rcvr *cesReceiver) startPollingMetrics(ctx context.Context) {
-	ticker := time.NewTicker(rcvr.config.CollectionInterval)
-
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			rcvr.logger.Info("I should start processing metrics now!")
-			metrics := rcvr.generateMetrics(5)
-			rcvr.nextConsumer.ConsumeMetrics(ctx, metrics)
-			rcvr.logger.Sugar().Info(metrics.MetricCount(), metrics.ResourceMetrics().Len())
-			for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
-				resourceMetrics := metrics.ResourceMetrics().At(i)
-				rcvr.logger.Sugar().Info(resourceMetrics.Resource().Attributes().AsRaw())
-				for j := 0; j < resourceMetrics.ScopeMetrics().Len(); j++ {
-					metrics := resourceMetrics.ScopeMetrics().At(j).Metrics()
-					for ind := 0; ind < metrics.Len(); ind++ {
-						rcvr.logger.Sugar().Info(metrics.At(ind).Name(), ' ', metrics.At(ind).Description())
-					}
-
-				}
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (rcvr *cesReceiver) generateMetrics(numberOfMetrics int) pmetric.Metrics {
-	metrics := pmetric.NewMetrics()
-
-	for i := 0; i <= numberOfMetrics; i++ {
-
-		// TODO get data from CES API and transform model
-		genFakeMetrics(metrics, i)
-	}
-
-	// err := rcvr.retrieveCesMetricData(metrics)
-	// if err != nil {
-	// 	rcvr.logger.Error(err.Error())
-	// }
-
-	return metrics
-}
-
-func (rcvr *cesReceiver) retrieveCesMetricData(otlpMetrics pmetric.Metrics) error {
-
-	request := &model.ListMetricsRequest{}
-	// TODO get list of values
-	// this api returns the list of metrics and their dimensions.
-	// then , need to list the values for unseen period to export and send to pipeline
-	response, err := rcvr.client.ListMetrics(request)
+func (rcvr *cesReceiver) pollMetricsAndConsume(ctx context.Context) error {
+	metricDefinitions, err := rcvr.listMetricDefinitions()
 	if err != nil {
 		return err
 	}
-
-	rcvr.appendToResourceMetrics(otlpMetrics, response)
-
-	rcvr.logger.Sugar().Info(response)
-
+	cesMetrics, err := rcvr.listDataPoints(metricDefinitions)
+	if err != nil {
+		rcvr.logger.Error(err.Error())
+		return err
+	}
+	metrics := internal.ConvertCESMetricsToOTLP(rcvr.config.ProjectId, rcvr.config.RegionName, rcvr.config.Filter, cesMetrics)
+	if err := rcvr.nextConsumer.ConsumeMetrics(ctx, metrics); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (rcvr *cesReceiver) appendToResourceMetrics(metrics pmetric.Metrics, cesListMetricsResp *model.ListMetricsResponse) {
-	for i := 0; i < int(cesListMetricsResp.MetaData.Count); i++ {
-		// resourceMetrics := metrics.ResourceMetrics().AppendEmpty()
-		// resource := resourceMetrics.Resource()
-		// (*cesListMetricsResp.Metrics)[1]
-
-		//rAttr := resource.Attributes()
-
+func (rcvr *cesReceiver) listMetricDefinitions() ([]model.MetricInfoList, error) {
+	response, err := rcvr.client.ListMetrics(&model.ListMetricsRequest{})
+	if err != nil {
+		return []model.MetricInfoList{}, err
 	}
+	if response.Metrics == nil || len((*response.Metrics)) == 0 {
+		return []model.MetricInfoList{}, errors.New("empty list of metric definitions")
+	}
+
+	return *response.Metrics, nil
 }
 
-func genFakeMetrics(metrics pmetric.Metrics, i int) {
-	resourceMetrics := metrics.ResourceMetrics().AppendEmpty()
-	resource := resourceMetrics.Resource()
-	atmAttrs := resource.Attributes()
-	atmAttrs.PutInt("atm.id", int64(i))
-	atmAttrs.PutStr("atm.stateid", "start")
-	atmAttrs.PutStr("atm.ispnetwork", "ispnetwork")
-	atmAttrs.PutStr("atm.serialnumber", "atm.SerialNumber")
+func convertMetricInfoListArrayToMetricInfoArray(infoListArray []model.MetricInfoList) []model.MetricInfo {
+	infoArray := make([]model.MetricInfo, len(infoListArray))
+	for i, infoList := range infoListArray {
+		infoArray[i] = model.MetricInfo{
+			Namespace:  infoList.Namespace,
+			MetricName: infoList.MetricName,
+			Dimensions: infoList.Dimensions,
+		}
+	}
+	return infoArray
+}
 
-	scopeMetrics := resourceMetrics.ScopeMetrics().AppendEmpty()
-	atmStartTime := time.Now()
-	atmDuration := 4 * time.Second
-	atmTime := atmStartTime.Add(atmDuration)
+func (rcvr *cesReceiver) listDataPoints(metricDefinitions []model.MetricInfoList) ([]model.BatchMetricData, error) {
+	// TODO: Handle delayed metrics. CES accepts metrics with up to a 30-minute delay.
+	// If the request is based on the current time ('now'), it may miss metrics delayed by a minute or more,
+	// as the next request would exclude them. Consider adding a delay configuration to account for this.
+	// TODO: Implement deduplication: There may be a need for deduplication, possibly using a Processor to ensure unique metrics are processed.
+	to := time.Now()
+	var from time.Time
+	if rcvr.lastUsedFinishTs.IsZero() {
+		from = to.Add(-1 * rcvr.config.CollectionInterval)
+	} else {
+		from = rcvr.lastUsedFinishTs
+	}
+	rcvr.lastUsedFinishTs = to
+	metrics := convertMetricInfoListArrayToMetricInfoArray(metricDefinitions)
 
-	atmMetric := scopeMetrics.Metrics().AppendEmpty()
-	atmMetric.SetName("atmOperationName")
-	atmMetric.SetDescription("test metrics")
-	gauge := atmMetric.SetEmptyGauge()
-	dp := gauge.DataPoints().AppendEmpty()
-	dp.SetStartTimestamp(pcommon.NewTimestampFromTime(atmStartTime))
-	dp.SetTimestamp(pcommon.NewTimestampFromTime(atmTime))
-	dp.SetDoubleValue(float64((rand.Intn(10))))
+	response, err := rcvr.client.BatchListMetricData(&model.BatchListMetricDataRequest{
+		Body: &model.BatchListMetricDataRequestBody{
+			Metrics: metrics,
+			Period:  strconv.Itoa(rcvr.config.Period),
+			Filter:  rcvr.config.Filter,
+			From:    from.UnixMilli(),
+			To:      to.UnixMilli(),
+		},
+	})
+	if err != nil {
+		return []model.BatchMetricData{}, err
+	}
+	if response.Metrics == nil || len(*response.Metrics) == 0 {
+		return []model.BatchMetricData{}, errors.New("empty list of metric data")
+	}
+	return *response.Metrics, nil
 }
 
 func (rcvr *cesReceiver) configureHttpProxy() (*config.Proxy, error) {
@@ -224,6 +229,8 @@ func (rcvr *cesReceiver) configureHttpProxy() (*config.Proxy, error) {
 }
 
 func (rcvr *cesReceiver) Shutdown(ctx context.Context) error {
-	rcvr.cancel()
+	if rcvr.cancel != nil {
+		rcvr.cancel()
+	}
 	return nil
 }
