@@ -5,12 +5,15 @@ package huaweicloudcesreceiver // import "github.com/open-telemetry/opentelemetr
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/receiver/scraperhelper"
+	"go.uber.org/multierr"
 )
 
 const (
@@ -26,6 +29,14 @@ var (
 		"SRE": struct{}{},
 	}
 	forbiddenNamespace = "SERVICE.BMS"
+)
+
+var (
+	// Predefined error responses for configuration validation failures
+	errMissingRegionName         = errors.New(`"region_name" is not specified in config`)
+	errMissingProjectID          = errors.New(`"project_id" is not specified in config`)
+	errInvalidCollectionInterval = errors.New(`invalid period; must be less than "collection_interval"`)
+	errInvalidProxy              = errors.New(`"proxy_address" must be specified if "proxy_user" or "proxy_password" is set"`)
 )
 
 // Config represent a configuration for the CloudWatch logs exporter.
@@ -49,6 +60,19 @@ type Config struct {
 	// ProjectId is a string to reference project where metrics should be associated with.
 	// If ProjectId is not filled in, the SDK will automatically call the IAM service to query the project id corresponding to the region.
 	ProjectId string `mapstructure:"project_id"`
+	// How retrieved data from Cloud Eye is aggregated.
+	// Possible values are 1, 300, 1200, 3600, 14400, and 86400.
+	// 1: Cloud Eye performs no aggregation and displays raw data.
+	// 300: Cloud Eye aggregates data every 5 minutes.
+	// 1200: Cloud Eye aggregates data every 20 minutes.
+	// 3600: Cloud Eye aggregates data every hour.
+	// 14400: Cloud Eye aggregates data every 4 hours.
+	// 86400: Cloud Eye aggregates data every 24 hours.
+	// For details about the aggregation, see https://support.huaweicloud.com/intl/en-us/ces_faq/ces_faq_0009.html
+	Period int `mapstructure:"period"`
+
+	// Data aggregation method. The supported values ​​are max, min, average, sum, variance.
+	Filter string `mapstructure:"filter"`
 }
 
 type HuaweiSessionConfig struct {
@@ -64,24 +88,37 @@ type HuaweiSessionConfig struct {
 
 var _ component.Config = (*Config)(nil)
 
+var validPeriods = []int{1, 300, 1200, 3600, 14400, 86400}
+
+var validFilters = []string{"max", "min", "average", "sum", "variance"}
+
 // Validate config
 func (config *Config) Validate() error {
-	// Validate that RegionName is not empty
+	var err error = nil
 	if config.RegionName == "" {
-		return errors.New("region_name must be specified")
+		err = multierr.Append(err, errMissingRegionName)
 	}
 
-	// Validate that ProjectId is not empty
 	if config.ProjectId == "" {
-		return errors.New("project_id must be specified")
+		err = multierr.Append(err, errMissingProjectID)
+	}
+	if index := slices.Index(validPeriods, config.Period); index == -1 {
+		err = multierr.Append(err, fmt.Errorf("invalid period: got %d; must be one of %v", config.Period, validPeriods))
+	}
+
+	if index := slices.Index(validFilters, config.Filter); index == -1 {
+		err = multierr.Append(err, fmt.Errorf("invalid filter: got %s; must be one of %v", config.Filter, validFilters))
+	}
+	if config.Period >= int(config.CollectionInterval.Seconds()) {
+		err = multierr.Append(err, errInvalidCollectionInterval)
 	}
 
 	// Validate that ProxyAddress is provided if ProxyUser or ProxyPassword is set
 	if (config.ProxyUser != "" || config.ProxyPassword != "") && config.ProxyAddress == "" {
-		return errors.New("proxy_address must be specified if proxy_user or proxy_password is set")
+		err = multierr.Append(err, errInvalidProxy)
 	}
 
-	return nil
+	return err
 }
 
 func KeysString(m map[string]any) string {
