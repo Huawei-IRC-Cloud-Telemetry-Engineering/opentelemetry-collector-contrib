@@ -153,7 +153,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/haproxyreceiver v0.108.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.108.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/httpcheckreceiver v0.108.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver v0.108.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudreceiver v0.108.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.108.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/influxdbreceiver v0.108.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jaegerreceiver v0.108.0
@@ -884,7 +884,7 @@ replace github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hapro
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/receiver/httpcheckreceiver => ../../receiver/httpcheckreceiver
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver => ../../receiver/huaweicloudcesreceiver
+replace github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudreceiver => ../../receiver/huaweicloudreceiver
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/extension/observer/dockerobserver => ../../extension/observer/dockerobserver
 
