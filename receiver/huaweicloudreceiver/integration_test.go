@@ -3,7 +3,7 @@
 
 //go:build integration
 
-package huaweicloudcesreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver"
+package huaweicloudreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudreceiver"
 
 import (
 	"context"
@@ -20,10 +20,10 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/golden"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest/pmetrictest"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver/internal/mocks"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudreceiver/internal/mocks"
 )
 
-func TestHuaweiCloudCESReceiverIntegration(t *testing.T) {
+func TestHuaweiCloudMetricsReceiverIntegration(t *testing.T) {
 	mc := mocks.NewCesClient(t)
 
 	mc.On("ListMetrics", mock.Anything).Return(&model.ListMetricsResponse{
@@ -71,9 +71,9 @@ func TestHuaweiCloudCESReceiverIntegration(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	rcvr, ok := recv.(*cesReceiver)
+	rcvr, ok := recv.(*huaweiReceiver)
 	require.True(t, ok)
-	rcvr.client = mc
+	rcvr.clients = &clients{ces: mc}
 
 	err = recv.Start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)

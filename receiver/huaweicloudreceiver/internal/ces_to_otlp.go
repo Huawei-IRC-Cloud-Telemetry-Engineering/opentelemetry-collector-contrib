@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package internal // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver/internal"
+package internal // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudreceiver/internal"
 
 import (
 	"fmt"
@@ -37,11 +37,8 @@ func GetDimension(dimensions []model.MetricsDimension, index int) *string {
 	return nil
 }
 
-func ConvertCESMetricsToOTLP(projectID, region, filter string, cesMetrics map[string]MetricData) pmetric.Metrics {
+func ConvertCESMetricsToOTLP(projectID, region, filter string, cesMetrics map[string]MetricData) ([]byte, error) {
 	metrics := pmetric.NewMetrics()
-	if len(cesMetrics) == 0 {
-		return metrics
-	}
 	resourceMetric := metrics.ResourceMetrics().AppendEmpty()
 
 	resource := resourceMetric.Resource()
@@ -81,6 +78,10 @@ func ConvertCESMetricsToOTLP(projectID, region, filter string, cesMetrics map[st
 			}
 		}
 	}
-
-	return metrics
+	marshaler := &pmetric.JSONMarshaler{}
+	data, err := marshaler.MarshalMetrics(metrics)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }

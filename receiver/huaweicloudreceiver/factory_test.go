@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package huaweicloudcesreceiver
+package huaweicloudreceiver
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 func TestNewFactory(t *testing.T) {
 	factory := NewFactory()
 	assert.NotNil(t, factory)
-	assert.Equal(t, component.MustNewType("huaweicloudcesreceiver"), factory.Type())
+	assert.Equal(t, component.MustNewType("huaweicloudreceiver"), factory.Type())
 }
 
 func TestCreateDefaultConfig(t *testing.T) {

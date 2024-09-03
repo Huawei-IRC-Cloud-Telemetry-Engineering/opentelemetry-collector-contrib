@@ -9,6 +9,7 @@ import (
 
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ces/v1/model"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
@@ -17,7 +18,7 @@ func TestConvertCESMetricsToOTLP(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    map[string]MetricData
-		expected pmetric.Metrics
+		expected []byte
 	}{
 		{
 			name: "Valid Metric Conversion",
@@ -65,18 +66,20 @@ func TestConvertCESMetricsToOTLP(t *testing.T) {
 					Unit: "count",
 				},
 			},
-			expected: expectedMetrics(),
+			expected: expectedMetrics(t),
 		},
 		{
 			name:     "Empty Metric Data",
 			input:    map[string]MetricData{},
-			expected: pmetric.NewMetrics(),
+			expected: expectedEmptyMetrics(t),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, ConvertCESMetricsToOTLP("project_1", "eu-west-101", "average", tt.input))
+			data, err := ConvertCESMetricsToOTLP("project_1", "eu-west-101", "average", tt.input)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, data)
 		})
 	}
 }
@@ -85,7 +88,7 @@ func float64Ptr(f float64) *float64 {
 	return &f
 }
 
-func expectedMetrics() pmetric.Metrics {
+func expectedMetrics(t *testing.T) []byte {
 	metrics := pmetric.NewMetrics()
 	resourceMetric := metrics.ResourceMetrics().AppendEmpty()
 
@@ -131,5 +134,23 @@ func expectedMetrics() pmetric.Metrics {
 	dp = dataPoints.AppendEmpty()
 	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.UnixMilli(1556625717000)))
 	dp.SetDoubleValue(3)
-	return metrics
+	marshaler := &pmetric.JSONMarshaler{}
+	data, err := marshaler.MarshalMetrics(metrics)
+	require.NoError(t, err)
+	return data
+}
+
+func expectedEmptyMetrics(t *testing.T) []byte {
+	metrics := pmetric.NewMetrics()
+	resourceMetric := metrics.ResourceMetrics().AppendEmpty()
+
+	resource := resourceMetric.Resource()
+	resource.Attributes().PutStr("cloud.provider", "huawei_cloud")
+	resource.Attributes().PutStr("project.id", "project_1")
+	resource.Attributes().PutStr("region", "eu-west-101")
+
+	marshaler := &pmetric.JSONMarshaler{}
+	data, err := marshaler.MarshalMetrics(metrics)
+	require.NoError(t, err)
+	return data
 }

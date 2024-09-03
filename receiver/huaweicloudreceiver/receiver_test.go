@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package huaweicloudcesreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver"
+package huaweicloudreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudreceiver"
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	"go.opentelemetry.io/collector/receiver/scraperhelper"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver/internal/mocks"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudreceiver/internal/mocks"
 )
 
 func stringPtr(s string) *string {
@@ -36,7 +36,7 @@ func TestNewReceiver(t *testing.T) {
 			CollectionInterval: 1 * time.Second,
 		},
 	}
-	mr := newHuaweiCloudCesReceiver(receivertest.NewNopSettings(), cfg, new(consumertest.MetricsSink))
+	mr := newHuaweiCloudMetricsReceiver(cfg, new(consumertest.MetricsSink), receivertest.NewNopSettings())
 	assert.NotNil(t, mr)
 }
 
@@ -60,9 +60,10 @@ func TestListMetricDefinitionsSuccess(t *testing.T) {
 
 	mockCes.On("ListMetrics", mock.Anything).Return(mockResponse, nil)
 
-	receiver := &cesReceiver{
-		client: mockCes,
-		config: createDefaultConfig().(*Config),
+	receiver := &huaweiReceiver{
+		clients: &clients{ces: mockCes},
+		telType: Metrics,
+		config:  createDefaultConfig().(*Config),
 	}
 
 	metrics, err := receiver.listMetricDefinitions(context.Background())
@@ -80,9 +81,9 @@ func TestListMetricDefinitionsFailure(t *testing.T) {
 	mockCes := mocks.NewCesClient(t)
 
 	mockCes.On("ListMetrics", mock.Anything).Return(nil, errors.New("failed to list metrics"))
-	receiver := &cesReceiver{
-		client: mockCes,
-		config: createDefaultConfig().(*Config),
+	receiver := &huaweiReceiver{
+		clients: &clients{ces: mockCes},
+		config:  createDefaultConfig().(*Config),
 	}
 
 	metrics, err := receiver.listMetricDefinitions(context.Background())
@@ -96,8 +97,8 @@ func TestListMetricDefinitionsFailure(t *testing.T) {
 func TestListDataPointsForMetricBackOffWIthDefaultConfig(t *testing.T) {
 	mockCes := mocks.NewCesClient(t)
 	next := new(consumertest.MetricsSink)
-	receiver := newHuaweiCloudCesReceiver(receivertest.NewNopSettings(), createDefaultConfig().(*Config), next)
-	receiver.client = mockCes
+	receiver := newHuaweiCloudMetricsReceiver(createDefaultConfig().(*Config), next, receivertest.NewNopSettings())
+	receiver.clients = &clients{ces: mockCes}
 
 	mockCes.On("ShowMetricData", mock.Anything).Return(nil, errors.New(requestThrottledErrMsg)).Times(3)
 	mockCes.On("ShowMetricData", mock.Anything).Return(&model.ShowMetricDataResponse{
@@ -132,15 +133,15 @@ func TestListDataPointsForMetricBackOffWIthDefaultConfig(t *testing.T) {
 func TestListDataPointsForMetricBackOffFails(t *testing.T) {
 	mockCes := mocks.NewCesClient(t)
 	next := new(consumertest.MetricsSink)
-	receiver := newHuaweiCloudCesReceiver(receivertest.NewNopSettings(), &Config{BackOffConfig: configretry.BackOffConfig{
+	receiver := newHuaweiCloudReceiver(receivertest.NewNopSettings(), Metrics, &Config{BackOffConfig: configretry.BackOffConfig{
 		Enabled:             true,
 		InitialInterval:     100 * time.Millisecond,
 		MaxInterval:         800 * time.Millisecond,
 		MaxElapsedTime:      1 * time.Second,
 		RandomizationFactor: 0,
 		Multiplier:          2,
-	}}, next)
-	receiver.client = mockCes
+	}}, &metricsReceiver{consumer: next})
+	receiver.clients = &clients{ces: mockCes}
 
 	mockCes.On("ShowMetricData", mock.Anything).Return(nil, errors.New(requestThrottledErrMsg)).Times(4)
 
@@ -162,8 +163,8 @@ func TestListDataPointsForMetricBackOffFails(t *testing.T) {
 func TestPollMetricsAndConsumeSuccess(t *testing.T) {
 	mockCes := mocks.NewCesClient(t)
 	next := new(consumertest.MetricsSink)
-	receiver := newHuaweiCloudCesReceiver(receivertest.NewNopSettings(), &Config{}, next)
-	receiver.client = mockCes
+	receiver := newHuaweiCloudReceiver(receivertest.NewNopSettings(), Metrics, &Config{}, &metricsReceiver{consumer: next})
+	receiver.clients = &clients{ces: mockCes}
 
 	mockCes.On("ListMetrics", mock.Anything).Return(&model.ListMetricsResponse{
 		Metrics: &[]model.MetricInfoList{
@@ -194,13 +195,13 @@ func TestPollMetricsAndConsumeSuccess(t *testing.T) {
 		},
 	}, nil)
 
-	err := receiver.pollMetricsAndConsume(context.Background())
+	err := receiver.pollTelemetryAndConsume(context.Background())
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, next.DataPointCount())
 }
 
-func TestStartReadingMetrics(t *testing.T) {
+func TestStartReadingTelemetry(t *testing.T) {
 	tests := []struct {
 		name                    string
 		scrapeInterval          time.Duration
@@ -254,21 +255,22 @@ func TestStartReadingMetrics(t *testing.T) {
 			next := new(consumertest.MetricsSink)
 			tt.setupMocks(mockCes)
 			logger := zaptest.NewLogger(t)
-			r := &cesReceiver{
+			r := &huaweiReceiver{
 				config: &Config{
 					ControllerConfig: scraperhelper.ControllerConfig{
 						CollectionInterval: tt.scrapeInterval,
 						InitialDelay:       10 * time.Millisecond,
 					},
 				},
-				client:       mockCes,
-				logger:       logger,
-				nextConsumer: next,
-				lastSeenTs:   make(map[string]time.Time),
+				clients:       &clients{ces: mockCes},
+				telType:       Metrics,
+				logger:        logger,
+				dataProcessor: &metricsReceiver{consumer: next},
+				lastSeenTs:    make(map[string]time.Time),
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			r.startReadingMetrics(ctx)
+			r.startReadingTelemetry(ctx)
 
 			assert.Equal(t, tt.expectedNumOfDataPoints, next.DataPointCount())
 		})

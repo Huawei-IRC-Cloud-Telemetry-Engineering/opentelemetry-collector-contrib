@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package internal // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver/internal"
+package internal // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudreceiver/internal"
 
 import (
 	ces "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ces/v1"

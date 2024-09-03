@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package huaweicloudcesreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver"
+package huaweicloudreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudreceiver"
 
 import (
 	"context"
@@ -12,19 +12,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
 	ces "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ces/v1"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ces/v1/model"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ces/v1/region"
+	lts "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/lts/v2"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config/configretry"
-	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver/internal"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudreceiver/internal"
 )
 
 const (
@@ -32,51 +30,65 @@ const (
 	requestThrottledErrMsg = "APIGW.0308"
 )
 
-type cesReceiver struct {
-	logger *zap.Logger
-	client internal.CesClient
-	cancel context.CancelFunc
+type telemetryType int
 
-	host         component.Host
-	nextConsumer consumer.Metrics
-	lastSeenTs   map[string]time.Time
-	config       *Config
-	shutdownChan chan struct{}
+const (
+	Metrics telemetryType = iota
+	Logs
+)
+
+type clients struct {
+	ces       internal.CesClient
+	ltsClient internal.LtsClient
 }
 
-func newHuaweiCloudCesReceiver(settings receiver.Settings, cfg *Config, next consumer.Metrics) *cesReceiver {
-	rcvr := &cesReceiver{
-		logger:       settings.Logger,
-		config:       cfg,
-		nextConsumer: next,
-		lastSeenTs:   make(map[string]time.Time),
-		shutdownChan: make(chan struct{}, 1),
+type huaweiReceiver struct {
+	logger  *zap.Logger
+	cancel  context.CancelFunc
+	clients *clients
+
+	telType       telemetryType
+	host          component.Host
+	dataProcessor receiverProcessor
+	lastSeenTs    map[string]time.Time
+	config        *Config
+	shutdownChan  chan struct{}
+}
+
+func newHuaweiCloudReceiver(settings receiver.Settings, telType telemetryType, cfg *Config, processor receiverProcessor) *huaweiReceiver {
+	rcvr := &huaweiReceiver{
+		logger:        settings.Logger,
+		config:        cfg,
+		telType:       telType,
+		dataProcessor: processor,
+		lastSeenTs:    make(map[string]time.Time),
+		shutdownChan:  make(chan struct{}, 1),
 	}
 	return rcvr
 }
 
-func (rcvr *cesReceiver) Start(ctx context.Context, host component.Host) error {
+func (rcvr *huaweiReceiver) Start(ctx context.Context, host component.Host) error {
 	rcvr.host = host
 	ctx, rcvr.cancel = context.WithCancel(ctx)
 
-	if rcvr.client == nil {
-		client, err := rcvr.createClient()
+	if rcvr.clients == nil {
+		clients, err := rcvr.createClients()
 		if err != nil {
 			rcvr.logger.Error(err.Error())
 			return nil
 		}
-		rcvr.client = client
+		rcvr.clients = clients
 	}
 
-	go rcvr.startReadingMetrics(ctx)
+	go rcvr.startReadingTelemetry(ctx)
 	return nil
 }
 
-func (rcvr *cesReceiver) startReadingMetrics(ctx context.Context) {
+func (rcvr *huaweiReceiver) startReadingTelemetry(ctx context.Context) {
 	if rcvr.config.InitialDelay > 0 {
 		<-time.After(rcvr.config.InitialDelay)
 	}
-	if err := rcvr.pollMetricsAndConsume(ctx); err != nil {
+	if err := rcvr.pollTelemetryAndConsume(ctx); err != nil {
 		rcvr.logger.Error(err.Error())
 	}
 	ticker := time.NewTicker(rcvr.config.CollectionInterval)
@@ -94,7 +106,7 @@ func (rcvr *cesReceiver) startReadingMetrics(ctx context.Context) {
 			//    all possible client/request errors and determine how to manage them.
 			//  - Consider implementing custom error messages or fallback mechanisms for critical failures.
 
-			if err := rcvr.pollMetricsAndConsume(ctx); err != nil {
+			if err := rcvr.pollTelemetryAndConsume(ctx); err != nil {
 				rcvr.logger.Error(err.Error())
 			}
 		case <-ctx.Done():
@@ -103,7 +115,7 @@ func (rcvr *cesReceiver) startReadingMetrics(ctx context.Context) {
 	}
 }
 
-func (rcvr *cesReceiver) createClient() (*ces.CesClient, error) {
+func (rcvr *huaweiReceiver) createClients() (*clients, error) {
 	auth, err := basic.NewCredentialsBuilder().
 		WithAk(string(rcvr.config.AccessKey)).
 		WithSk(string(rcvr.config.SecretKey)).
@@ -133,37 +145,48 @@ func (rcvr *cesReceiver) createClient() (*ces.CesClient, error) {
 		return nil, err
 	}
 
-	client := ces.NewCesClient(hcHTTPConfig)
-
-	return client, nil
+	return &clients{
+		ces:       ces.NewCesClient(hcHTTPConfig),
+		ltsClient: lts.NewLtsClient(hcHTTPConfig),
+	}, nil
 }
 
-func (rcvr *cesReceiver) pollMetricsAndConsume(ctx context.Context) error {
-	if rcvr.client == nil {
+func (rcvr *huaweiReceiver) pollTelemetryAndConsume(ctx context.Context) error {
+	if rcvr.clients == nil {
 		return errors.New("invalid client")
 	}
-	metricDefinitions, err := rcvr.listMetricDefinitions(ctx)
-	if err != nil {
-		return err
-	}
-	metrics := rcvr.listDataPoints(ctx, metricDefinitions)
-	otpMetrics := internal.ConvertCESMetricsToOTLP(rcvr.config.ProjectID, rcvr.config.RegionName, rcvr.config.Filter, metrics)
-	if err := rcvr.nextConsumer.ConsumeMetrics(ctx, otpMetrics); err != nil {
-		return err
+	switch rcvr.telType {
+	case Metrics:
+		metricDefinitions, err := rcvr.listMetricDefinitions(ctx)
+		if err != nil {
+			return err
+		}
+		metrics := rcvr.listDataPoints(ctx, metricDefinitions)
+		otpMetrics, err := internal.ConvertCESMetricsToOTLP(rcvr.config.ProjectID, rcvr.config.RegionName, rcvr.config.Filter, metrics)
+		if err != nil {
+			return err
+		}
+		if err := rcvr.dataProcessor.processReceivedData(ctx, otpMetrics); err != nil {
+			return err
+		}
+	case Logs:
+		return errors.New("not implemented")
+	default:
+		return errors.New("unknown telementery type")
 	}
 	return nil
 }
 
-func (rcvr *cesReceiver) listMetricDefinitions(ctx context.Context) ([]model.MetricInfoList, error) {
+func (rcvr *huaweiReceiver) listMetricDefinitions(ctx context.Context) ([]model.MetricInfoList, error) {
 	response, err := internal.MakeAPICallWithRetry(
 		ctx,
 		rcvr.shutdownChan,
 		rcvr.logger,
 		func() (*model.ListMetricsResponse, error) {
-			return rcvr.client.ListMetrics(&model.ListMetricsRequest{})
+			return rcvr.clients.ces.ListMetrics(&model.ListMetricsRequest{})
 		},
 		func(err error) bool { return strings.Contains(err.Error(), requestThrottledErrMsg) },
-		newExponentialBackOff(&rcvr.config.BackOffConfig),
+		internal.NewExponentialBackOff(&rcvr.config.BackOffConfig),
 	)
 	if err != nil {
 		return []model.MetricInfoList{}, err
@@ -190,7 +213,7 @@ func (rcvr *cesReceiver) listMetricDefinitions(ctx context.Context) ([]model.Met
 //
 // Returns:
 //   - A map where each key is a unique metric identifier and each value is the associated MetricData.
-func (rcvr *cesReceiver) listDataPoints(ctx context.Context, metricDefinitions []model.MetricInfoList) map[string]internal.MetricData {
+func (rcvr *huaweiReceiver) listDataPoints(ctx context.Context, metricDefinitions []model.MetricInfoList) map[string]internal.MetricData {
 	// TODO: Implement deduplication: There may be a need for deduplication, possibly using a Processor to ensure unique metrics are processed.
 	to := time.Now()
 	metrics := make(map[string]internal.MetricData)
@@ -238,13 +261,13 @@ func (rcvr *cesReceiver) listDataPoints(ctx context.Context, metricDefinitions [
 	return metrics
 }
 
-func (rcvr *cesReceiver) listDataPointsForMetric(ctx context.Context, from, to time.Time, infoList model.MetricInfoList) (*model.ShowMetricDataResponse, error) {
+func (rcvr *huaweiReceiver) listDataPointsForMetric(ctx context.Context, from, to time.Time, infoList model.MetricInfoList) (*model.ShowMetricDataResponse, error) {
 	return internal.MakeAPICallWithRetry(
 		ctx,
 		rcvr.shutdownChan,
 		rcvr.logger,
 		func() (*model.ShowMetricDataResponse, error) {
-			return rcvr.client.ShowMetricData(&model.ShowMetricDataRequest{
+			return rcvr.clients.ces.ShowMetricData(&model.ShowMetricDataRequest{
 				Namespace:  infoList.Namespace,
 				MetricName: infoList.MetricName,
 				Dim0:       infoList.Dimensions[0].Name + "," + infoList.Dimensions[0].Value,
@@ -258,20 +281,8 @@ func (rcvr *cesReceiver) listDataPointsForMetric(ctx context.Context, from, to t
 			})
 		},
 		func(err error) bool { return strings.Contains(err.Error(), requestThrottledErrMsg) },
-		newExponentialBackOff(&rcvr.config.BackOffConfig),
+		internal.NewExponentialBackOff(&rcvr.config.BackOffConfig),
 	)
-}
-
-func newExponentialBackOff(backOffConfig *configretry.BackOffConfig) *backoff.ExponentialBackOff {
-	return &backoff.ExponentialBackOff{
-		InitialInterval:     backOffConfig.InitialInterval,
-		RandomizationFactor: backOffConfig.RandomizationFactor,
-		Multiplier:          backOffConfig.Multiplier,
-		MaxInterval:         backOffConfig.MaxInterval,
-		MaxElapsedTime:      backOffConfig.MaxElapsedTime,
-		Stop:                backoff.Stop,
-		Clock:               backoff.SystemClock,
-	}
 }
 
 func createHTTPConfig(cfg HuaweiSessionConfig) (*config.HttpConfig, error) {
@@ -307,7 +318,7 @@ func configureHTTPProxy(cfg HuaweiSessionConfig) (*config.Proxy, error) {
 	return proxy, nil
 }
 
-func (rcvr *cesReceiver) Shutdown(_ context.Context) error {
+func (rcvr *huaweiReceiver) Shutdown(_ context.Context) error {
 	if rcvr.cancel != nil {
 		rcvr.cancel()
 	}
