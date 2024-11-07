@@ -13,7 +13,6 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/huawei"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/huaweicloudcesreceiver/internal/metadata"
 )
 
@@ -34,7 +33,7 @@ func createDefaultConfig() component.Config {
 			RandomizationFactor: backoff.DefaultRandomizationFactor,
 			Multiplier:          backoff.DefaultMultiplier,
 		},
-		HuaweiSessionConfig: huawei.HuaweiSessionConfig{
+		huaweiSessionConfig: huaweiSessionConfig{
 			NoVerifySSL: false,
 		},
 	}
@@ -45,11 +44,5 @@ func createMetricsReceiver(
 	params receiver.Settings,
 	cfg component.Config,
 	next consumer.Metrics) (receiver.Metrics, error) {
-
-	cesCfg := cfg.(*Config)
-
-	cesReceiver := newHuaweiCloudCesReceiver(params, cesCfg, next)
-
-	return cesReceiver, nil
-
+	return nil, nil
 }
