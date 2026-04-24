@@ -1,6 +1,6 @@
 module github.com/open-telemetry/opentelemetry-collector-contrib/exporter/elasticsearchexporter
 
-go 1.23.0
+go 1.24.0
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
@@ -14,7 +14,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.128.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.128.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest v0.128.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
 	go.opentelemetry.io/collector/client v1.34.1-0.20250630084015-32278ed2ed08
 	go.opentelemetry.io/collector/component v1.34.1-0.20250630084015-32278ed2ed08
@@ -36,7 +36,7 @@ require (
 	go.opentelemetry.io/collector/pdata v1.34.1-0.20250630084015-32278ed2ed08
 	go.opentelemetry.io/collector/pdata/pprofile v0.128.1-0.20250630084015-32278ed2ed08
 	go.opentelemetry.io/ebpf-profiler v0.0.0-20250212075250-7bf12d3f962f
-	go.opentelemetry.io/otel v1.36.0
+	go.opentelemetry.io/otel v1.41.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.15.0
@@ -52,7 +52,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/foxboron/go-tpm-keyfiles v0.0.0-20250323135004-b31fac66206e // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/go-logr/logr v1.4.2 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
@@ -82,7 +82,7 @@ require (
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.elastic.co/apm/v2 v2.7.0 // indirect
 	go.elastic.co/fastjson v1.5.0 // indirect
-	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/config/configmiddleware v0.128.1-0.20250630084015-32278ed2ed08 // indirect
 	go.opentelemetry.io/collector/config/configretry v1.34.1-0.20250630084015-32278ed2ed08 // indirect
 	go.opentelemetry.io/collector/config/configtls v1.34.1-0.20250630084015-32278ed2ed08 // indirect
@@ -103,10 +103,10 @@ require (
 	go.opentelemetry.io/contrib/bridges/otelzap v0.11.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
 	go.opentelemetry.io/otel/log v0.12.2 // indirect
-	go.opentelemetry.io/otel/metric v1.36.0 // indirect
+	go.opentelemetry.io/otel/metric v1.41.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.36.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.36.0 // indirect
-	go.opentelemetry.io/otel/trace v1.36.0 // indirect
+	go.opentelemetry.io/otel/trace v1.41.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect

@@ -1,12 +1,12 @@
 module github.com/open-telemetry/opentelemetry-collector-contrib/exporter/alibabacloudlogserviceexporter
 
-go 1.23.0
+go 1.24.0
 
 require (
 	github.com/aliyun/aliyun-log-go-sdk v0.1.83
 	github.com/gogo/protobuf v1.3.2
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.128.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/collector/component v1.34.1-0.20250630084015-32278ed2ed08
 	go.opentelemetry.io/collector/component/componenttest v0.128.1-0.20250630084015-32278ed2ed08
 	go.opentelemetry.io/collector/config/configopaque v1.34.1-0.20250630084015-32278ed2ed08
@@ -16,18 +16,19 @@ require (
 	go.opentelemetry.io/collector/exporter/exportertest v0.128.1-0.20250630084015-32278ed2ed08
 	go.opentelemetry.io/collector/pdata v1.34.1-0.20250630084015-32278ed2ed08
 	go.opentelemetry.io/collector/pdata/testdata v0.128.1-0.20250630084015-32278ed2ed08
-	go.opentelemetry.io/otel v1.36.0
+	go.opentelemetry.io/otel v1.41.0
 	go.uber.org/zap v1.27.0
 )
 
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
-	github.com/go-logr/logr v1.4.2 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
@@ -46,7 +47,7 @@ require (
 	github.com/pierrec/lz4 v2.6.0+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/client v1.34.1-0.20250630084015-32278ed2ed08 // indirect
 	go.opentelemetry.io/collector/config/configretry v1.34.1-0.20250630084015-32278ed2ed08 // indirect
 	go.opentelemetry.io/collector/consumer v1.34.1-0.20250630084015-32278ed2ed08 // indirect
@@ -66,10 +67,10 @@ require (
 	go.opentelemetry.io/collector/receiver/xreceiver v0.128.1-0.20250630084015-32278ed2ed08 // indirect
 	go.opentelemetry.io/contrib/bridges/otelzap v0.11.0 // indirect
 	go.opentelemetry.io/otel/log v0.12.2 // indirect
-	go.opentelemetry.io/otel/metric v1.36.0 // indirect
+	go.opentelemetry.io/otel/metric v1.41.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.36.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.36.0 // indirect
-	go.opentelemetry.io/otel/trace v1.36.0 // indirect
+	go.opentelemetry.io/otel/trace v1.41.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.39.0 // indirect
