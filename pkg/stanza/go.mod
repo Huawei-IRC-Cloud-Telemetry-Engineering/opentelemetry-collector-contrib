@@ -1,6 +1,6 @@
 module github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/bmatcuk/doublestar/v4 v4.8.1
@@ -28,16 +28,16 @@ require (
 	go.opentelemetry.io/collector/receiver v1.34.1-0.20250630084015-32278ed2ed08
 	go.opentelemetry.io/collector/receiver/receiverhelper v0.128.1-0.20250630084015-32278ed2ed08
 	go.opentelemetry.io/collector/receiver/receivertest v0.128.1-0.20250630084015-32278ed2ed08
-	go.opentelemetry.io/otel v1.41.0
-	go.opentelemetry.io/otel/metric v1.41.0
-	go.opentelemetry.io/otel/sdk/metric v1.36.0
-	go.opentelemetry.io/otel/trace v1.41.0
+	go.opentelemetry.io/otel v1.44.0
+	go.opentelemetry.io/otel/metric v1.44.0
+	go.opentelemetry.io/otel/sdk/metric v1.44.0
+	go.opentelemetry.io/otel/trace v1.44.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/sys v0.33.0
-	golang.org/x/text v0.26.0
-	gonum.org/v1/gonum v0.16.0
+	golang.org/x/sys v0.47.0
+	golang.org/x/text v0.41.0
+	gonum.org/v1/gonum v0.17.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -77,12 +77,12 @@ require (
 	go.opentelemetry.io/collector/receiver/xreceiver v0.128.1-0.20250630084015-32278ed2ed08 // indirect
 	go.opentelemetry.io/contrib/bridges/otelzap v0.11.0 // indirect
 	go.opentelemetry.io/otel/log v0.12.2 // indirect
-	go.opentelemetry.io/otel/sdk v1.36.0 // indirect
-	golang.org/x/crypto v0.37.0 // indirect
-	golang.org/x/net v0.39.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
-	google.golang.org/grpc v1.73.0 // indirect
-	google.golang.org/protobuf v1.36.6 // indirect
+	go.opentelemetry.io/otel/sdk v1.44.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/grpc v1.83.2 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
