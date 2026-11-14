@@ -3,7 +3,7 @@ module github.com/open-telemetry/opentelemetry-collector-contrib/exporter/sumolo
 go 1.26.0
 
 require (
-	github.com/klauspost/compress v1.18.7
+	github.com/klauspost/compress v1.20.4
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/sumologicextension v0.128.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.34.1-0.20250630084015-32278ed2ed08
